@@ -1,0 +1,98 @@
+---
+title: "BEATcc_MO39873 Design_for_GEICO"
+author: "Anh Nguyen Duc"
+date: "`r Sys.Date()`"
+# output: word_document
+
+output:
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_float: true
+    to_depth: 5
+    collapsed: false
+    smooth_scroll: false
+    number_sections: true
+    theme: united
+  word_document: default
+header-includes: \usepackage{docmute}
+classoption: landscape
+---
+
+```{r,echo=F,message=F,warning=F}
+rm(list=ls())
+require(knitr)
+require(tidyverse)
+require(rpact)
+knitr::opts_chunk$set(echo = TRUE, cache=FALSE, autodep=FALSE)
+set.seed(21)
+```
+
+# Update June 2021 with dual primary endpoint PFS and OS
+
+## PFS Design
+```{r,echo=T,message=F,warning=F}
+fpi <- as.Date('2018-10-15')
+
+## PFS
+mPFS_ctr <- 9.1
+hrPFS <- 0.675
+alp_PFS <- .02 # two-sided
+
+pow_PFS <- .831 # only this would yield ~280 PFS events + MDD~0.756 per GEICO amendment not 80%
+
+rr <- 1 # Pla : Atz
+
+accrualIntensity <-  c(3, c(3,4,7,12,14,17,23,25,27,32,37,42,54,62,70,92,102,130,144,158,175,200,216,233,251,277,290,307,325,341,359,380,399,404) %>% diff)
+
+accrualTime <- seq(0, accrualIntensity %>% length)
+
+deg_PFS <- getDesignGroupSequential(kMax=1, alpha=alp_PFS, sided = 2, beta=1-pow_PFS)
+
+deg_PFS %>% summary %>% print #simpleBoundarySummary %>% t %>% kable(caption = 'PFS at 2% one-sided significance level')
+
+sam_PFS <- getSampleSizeSurvival(design = deg_PFS, median2 = mPFS_ctr, hazardRatio = hrPFS, allocationRatioPlanned = rr, accrualTime = accrualTime, accrualIntensity = accrualIntensity, dropoutRate1 = .1, dropoutRate2 = .1, dropoutTime = 48)
+sam_PFS %>% summary %>% print
+```
+
+
+## OS Design
+```{r,echo=T,message=F,warning=F}
+mOS_ctr <- 17.5
+hrOS <- 0.7
+alp_OS <- .03 # two-sided
+
+pow_OS <- .8
+
+# get OS number at PFS analysis. Note based on OS events projected at PFS analysis from GEICO, 197 deaths should have taken place by the time of PFS analysis
+```
+
+Number of OS events at PFS analysis (IA)
+
+```{r,echo=T,message=F,warning=F}
+(event_OS <- getEventProbabilities(time=sam_PFS$analysisTime %>% as.numeric, lambda2 = log(2)/mOS_ctr, hazardRatio = hrOS, allocationRatioPlanned = rr, accrualTime = accrualTime, accrualIntensity = accrualIntensity, dropoutRate1 = .1, dropoutRate2 = .1, dropoutTime = 48)$overallEventProbabilities * sum(accrualIntensity)) # ~195
+
+info_rate_OS <- c(event_OS,288)/288 
+
+deg_OS <- getDesignGroupSequential(kMax=2, alpha=alp_OS, sided = 2, beta=1-pow_OS, informationRates = info_rate_OS)
+deg_OS %>% summary %>% print
+
+sam_OS <- getSampleSizeSurvival(design = deg_OS, median2 = mOS_ctr, hazardRatio = hrOS, allocationRatioPlanned = rr, 
+                                accrualTime = accrualTime, accrualIntensity = accrualIntensity, dropoutRate1 = .1,
+                                dropoutRate2 = .1, dropoutTime = 48)
+
+sam_OS %>% summary %>% print
+
+# CCOD for IA and FA
+```
+
+
+CCODs
+
+```{r,echo=T,message=F,warning=F}
+fpi + (sam_OS$analysisTime %>% as.vector)*30.4375
+```
+
+```{r,echo=T,message=F,warning=F}
+sessionInfo() %>% print
+```
